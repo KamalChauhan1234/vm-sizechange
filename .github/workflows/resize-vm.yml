@@ -1,0 +1,64 @@
+name: Stop and Resize Azure VM
+
+on:
+  workflow_dispatch:
+
+jobs:
+  resize:
+    runs-on: ubuntu-latest
+
+    env:
+      ARM_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
+      ARM_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID:       ${{ secrets.ARM_TENANT_ID }}
+      RESOURCE_GROUP:      "rg-vm"
+      VM_NAME:             "vm1"
+      NEW_SIZE:            "Standard_D2s_v3"
+
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v3
+
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: VM band karo (deallocate)
+        run: |
+          echo "VM band ho rahi hai..."
+          az vm deallocate \
+            --resource-group $RESOURCE_GROUP \
+            --name $VM_NAME
+          echo "VM band ho gayi!"
+
+      - name: Terraform install
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform apply — size change
+        run: |
+          terraform apply -auto-approve \
+            -var="vm_size=$NEW_SIZE" \
+            -var="resource_group_name=$RESOURCE_GROUP" \
+            -var="vm_name=$VM_NAME"
+
+      - name: VM start karo
+        if: always()
+        run: |
+          echo "VM start ho rahi hai..."
+          az vm start \
+            --resource-group $RESOURCE_GROUP \
+            --name $VM_NAME
+          echo "Done!"
+
+      - name: Final size verify karo
+        run: |
+          az vm show \
+            --resource-group $RESOURCE_GROUP \
+            --name $VM_NAME \
+            --query "hardwareProfile.vmSize" \
+            -o tsv
