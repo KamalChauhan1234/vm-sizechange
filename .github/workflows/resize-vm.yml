@@ -8,18 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ARM_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
-      ARM_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-      ARM_TENANT_ID:       ${{ secrets.ARM_TENANT_ID }}
-      RESOURCE_GROUP:      "rg-vm"
-      VM_NAME:             "vm1"
-      NEW_SIZE:            "Standard_D2s_v3"
+      RESOURCE_GROUP: "rg-vm"
+      VM_NAME:        "vm1"
+      NEW_SIZE:       "Standard_D2s_v3"
 
     steps:
-      - name: Code checkout
-        uses: actions/checkout@v3
-
       - name: Azure login
         uses: azure/login@v1
         with:
@@ -34,38 +27,35 @@ jobs:
           echo "Current status: $STATUS"
           if [[ "$STATUS" != *"deallocated"* ]]; then
             echo "VM band ho rahi hai..."
-            az vm deallocate --resource-group $RESOURCE_GROUP --name $VM_NAME
+            az vm deallocate \
+              --resource-group $RESOURCE_GROUP \
+              --name $VM_NAME
             echo "VM band ho gayi!"
           else
-            echo "VM already band hai, skip kar rahe hain"
+            echo "VM already band hai"
           fi
 
-      - name: Terraform install
-        uses: hashicorp/setup-terraform@v2
-
-      - name: Terraform init
-        run: terraform init
-
-      - name: Terraform apply — size change
+      - name: VM size change karo
         run: |
-          terraform apply -auto-approve \
-            -var="vm_size=$NEW_SIZE" \
-            -var="resource_group_name=$RESOURCE_GROUP" \
-            -var="vm_name=$VM_NAME"
+          echo "Size change ho rahi hai..."
+          az vm resize \
+            --resource-group $RESOURCE_GROUP \
+            --name $VM_NAME \
+            --size $NEW_SIZE
+          echo "Size change ho gayi!"
 
       - name: VM start karo
         if: always()
         run: |
-          echo "VM start ho rahi hai..."
           az vm start \
             --resource-group $RESOURCE_GROUP \
             --name $VM_NAME
-          echo "Done!"
+          echo "VM chal padi!"
 
-      - name: Final size verify karo
+      - name: Size verify karo
         run: |
-          az vm show \
+          CURRENT_SIZE=$(az vm show \
             --resource-group $RESOURCE_GROUP \
             --name $VM_NAME \
-            --query "hardwareProfile.vmSize" \
-            -o tsv
+            --query "hardwareProfile.vmSize" -o tsv)
+          echo "VM ka naya size: $CURRENT_SIZE"
